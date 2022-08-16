@@ -6,9 +6,10 @@ namespace Billing.Services
     {
         private readonly ILogger<BillingService> _logger;
 
-        private static long _nextCoinId = 1;
+        // get this from db        
         private static List<User> users = new List<User>();
         private static List<UserCoin> userCoins = new List<UserCoin>();
+        private static long _nextCoinId = 1;
 
         public BillingService(ILogger<BillingService> logger)
         {
@@ -45,15 +46,25 @@ namespace Billing.Services
                 });
             }
 
-            long amount = request.Amount - users.Count;
+            long amount = request.Amount;
             long totalRating = users.Sum(u => u.Rating);
-            double total = 0;
-            double oldTotal = total;
+            long allocation = 0;
+            int remainUsers = users.Count - 1;
             foreach (var user in users)
-            {
-                total += 1.0 * user.Rating / totalRating * amount;
-                var coinAmount = (int)total - (int)oldTotal + 1;
-                for (int i = 0; i < coinAmount; i++)
+            {               
+                allocation = (int)Math.Round(1.0 * user.Rating / totalRating * amount);
+
+                if (allocation == 0)
+                {
+                    allocation = 1;
+                }
+
+                if (allocation > amount - remainUsers)
+                {
+                    allocation = amount - remainUsers;
+                }
+
+                for (int i = 0; i < allocation; i++)
                 {
                     var newCoin = new UserCoin(_nextCoinId, user);
                     userCoins.Add(newCoin);
@@ -61,7 +72,10 @@ namespace Billing.Services
 
                     _nextCoinId++;
                 }
-                oldTotal = total;
+
+                totalRating -= user.Rating;
+                amount -= allocation;
+                remainUsers -= 1;
             }
 
             return Task.FromResult(new Response()
